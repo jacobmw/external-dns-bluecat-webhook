@@ -34,9 +34,14 @@ spec:
             - --health-address=:8080
             - --domain-filter=example.com
             - --bluecat-dns-deploy-type=no-deploy
+            - --bluecat-ca-file=/etc/bluecat/ca.crt
           envFrom:
             - secretRef:
                 name: bluecat
+          volumeMounts:
+            - name: bam-ca
+              mountPath: /etc/bluecat
+              readOnly: true
           ports:
             - name: health
               containerPort: 8080
@@ -58,3 +63,7 @@ spec:
             - --txt-owner-id=example
             - --policy=upsert-only
             - --registry=txt
+      volumes:
+        - name: bam-ca
+          configMap:
+            name: bam-ca

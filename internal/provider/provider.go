@@ -42,6 +42,7 @@ func New(ctx context.Context, cfg *config.Config) (*Bluecat, error) {
 		Username:      cfg.Username,
 		Password:      cfg.Password,
 		SkipTLSVerify: cfg.SkipTLSVerify,
+		CAFile:        cfg.CAFile,
 		Timeout:       cfg.HTTPClientTimeout,
 	})
 	if err != nil {

@@ -36,7 +36,8 @@ Flags and environment variables are equivalent. Credentials from the environment
 | `--bluecat-dns-view` | `BLUECAT_DNS_VIEW` | Optional view name filter |
 | `--bluecat-dns-deploy-type` | `BLUECAT_DNS_DEPLOY_TYPE` | `no-deploy` (default), `quick-deploy`, or `dynamic` |
 | `--bluecat-dns-server-name` | `BLUECAT_DNS_SERVER_NAME` | When set with `quick-deploy`, POST a zone deployment after changes |
-| `--bluecat-skip-tls-verify` | `BLUECAT_SKIP_TLS_VERIFY` | Skip TLS verify (labs only) |
+| `--bluecat-skip-tls-verify` | `BLUECAT_SKIP_TLS_VERIFY` | Skip TLS verify (labs only; incompatible with `--bluecat-ca-file`) |
+| `--bluecat-ca-file` | `BLUECAT_CA_FILE` | PEM file of extra CA certificates to trust for BAM TLS |
 | `--bluecat-config-file` | `BLUECAT_CONFIG_FILE` | JSON file using the same keys as the old in-tree provider |
 | `--domain-filter` | | Limit managed domains |
 | `--listen-address` | | Webhook API, default `127.0.0.1:8888` |
@@ -53,6 +54,7 @@ JSON file example:
   "dnsView": "Internal",
   "rootZone": "example.com",
   "dnsDeployType": "no-deploy",
+  "caFile": "/etc/bluecat/ca.crt",
   "skipTLSVerify": false
 }
 ```
@@ -71,6 +73,7 @@ external-dns-bluecat-webhook \
   --bluecat-username="$BLUECAT_USERNAME" \
   --bluecat-password="$BLUECAT_PASSWORD" \
   --bluecat-root-zone=example.com \
+  --bluecat-ca-file=/etc/bluecat/ca.crt \
   --domain-filter=example.com \
   --listen-address=127.0.0.1:8888
 ```

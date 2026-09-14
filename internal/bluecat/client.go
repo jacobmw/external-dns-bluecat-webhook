@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -48,6 +50,7 @@ type Config struct {
 	Host          string
 	Username      string
 	Password      string
+	CAFile        string
 	SkipTLSVerify bool
 	Timeout       time.Duration
 }
@@ -64,15 +67,18 @@ func Login(ctx context.Context, cfg Config) (Client, error) {
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
+	tlsCfg, err := tlsConfig(cfg.SkipTLSVerify, cfg.CAFile)
+	if err != nil {
+		return nil, err
+	}
 	c := &httpClient{
 		baseURL: strings.TrimRight(cfg.Host, "/"),
 		httpClient: &http.Client{
 			Timeout: timeout,
 			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: cfg.SkipTLSVerify, //nolint:gosec // operator-controlled for lab BAM certs
-				},
+				Proxy:             http.ProxyFromEnvironment,
+				TLSClientConfig:   tlsCfg,
+				ForceAttemptHTTP2: true,
 			},
 		},
 	}
@@ -336,6 +342,33 @@ func (c *httpClient) do(ctx context.Context, method, path, token string, body io
 		req.Header.Set("Authorization", "Basic "+token)
 	}
 	return c.httpClient.Do(req)
+}
+
+func tlsConfig(skipVerify bool, caFile string) (*tls.Config, error) {
+	if skipVerify && caFile != "" {
+		return nil, fmt.Errorf("cannot set both skip TLS verify and a CA file")
+	}
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	if skipVerify {
+		cfg.InsecureSkipVerify = true //nolint:gosec // operator-controlled for lab BAM certs
+		return cfg, nil
+	}
+	if caFile == "" {
+		return cfg, nil
+	}
+	pem, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, fmt.Errorf("read CA file %s: %w", caFile, err)
+	}
+	pool, err := x509.SystemCertPool()
+	if err != nil || pool == nil {
+		pool = x509.NewCertPool()
+	}
+	if !pool.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("no certificates found in CA file %s", caFile)
+	}
+	cfg.RootCAs = pool
+	return cfg, nil
 }
 
 func relativeName(absolute, zone string) string {

@@ -32,19 +32,21 @@ type Config struct {
 	DNSServerName     string
 	DNSDeployType     string
 	SkipTLSVerify     bool
+	CAFile            string
 	HTTPClientTimeout time.Duration
 }
 
 type fileConfig struct {
-	BluecatHost       string `json:"bluecatHost"`
-	BluecatUsername   string `json:"bluecatUsername"`
-	BluecatPassword   string `json:"bluecatPassword"`
-	DNSConfiguration  string `json:"dnsConfiguration"`
-	DNSServerName     string `json:"dnsServerName"`
-	DNSDeployType     string `json:"dnsDeployType"`
-	View              string `json:"dnsView"`
-	RootZone          string `json:"rootZone"`
-	SkipTLSVerify     bool   `json:"skipTLSVerify"`
+	BluecatHost      string `json:"bluecatHost"`
+	BluecatUsername  string `json:"bluecatUsername"`
+	BluecatPassword  string `json:"bluecatPassword"`
+	DNSConfiguration string `json:"dnsConfiguration"`
+	DNSServerName    string `json:"dnsServerName"`
+	DNSDeployType    string `json:"dnsDeployType"`
+	View             string `json:"dnsView"`
+	RootZone         string `json:"rootZone"`
+	SkipTLSVerify    bool   `json:"skipTLSVerify"`
+	CAFile           string `json:"caFile"`
 }
 
 // Load parses flags and environment, then optionally overlays a JSON config file.
@@ -78,7 +80,8 @@ func Load(args []string) (*Config, error) {
 	fs.StringVar(&cfg.RootZone, "bluecat-root-zone", os.Getenv("BLUECAT_ROOT_ZONE"), "root zone used to discover zones (contains filter)")
 	fs.StringVar(&cfg.DNSServerName, "bluecat-dns-server-name", os.Getenv("BLUECAT_DNS_SERVER_NAME"), "when set, enables zone deploy after changes")
 	fs.StringVar(&cfg.DNSDeployType, "bluecat-dns-deploy-type", envOr("BLUECAT_DNS_DEPLOY_TYPE", cfg.DNSDeployType), "no-deploy, quick-deploy, or dynamic")
-	fs.BoolVar(&cfg.SkipTLSVerify, "bluecat-skip-tls-verify", envBool("BLUECAT_SKIP_TLS_VERIFY"), "skip TLS verification for BAM")
+	fs.BoolVar(&cfg.SkipTLSVerify, "bluecat-skip-tls-verify", envBool("BLUECAT_SKIP_TLS_VERIFY"), "skip TLS verification for BAM (do not use with --bluecat-ca-file)")
+	fs.StringVar(&cfg.CAFile, "bluecat-ca-file", os.Getenv("BLUECAT_CA_FILE"), "PEM file of extra CA certificates to trust for BAM TLS")
 	fs.DurationVar(&cfg.HTTPClientTimeout, "bluecat-http-timeout", cfg.HTTPClientTimeout, "timeout for BAM HTTP calls")
 
 	if err := fs.Parse(args); err != nil {
@@ -96,6 +99,9 @@ func Load(args []string) (*Config, error) {
 	if v, ok := os.LookupEnv("BLUECAT_PASSWORD"); ok && v != "" {
 		cfg.Password = v
 	}
+	if v, ok := os.LookupEnv("BLUECAT_CA_FILE"); ok && v != "" {
+		cfg.CAFile = v
+	}
 
 	switch cfg.DNSDeployType {
 	case "no-deploy", "quick-deploy", "dynamic":
@@ -104,6 +110,9 @@ func Load(args []string) (*Config, error) {
 	}
 	if cfg.Host == "" {
 		return nil, fmt.Errorf("bluecat host is required (--bluecat-host or BLUECAT_HOST)")
+	}
+	if cfg.SkipTLSVerify && cfg.CAFile != "" {
+		return nil, fmt.Errorf("cannot set both --bluecat-skip-tls-verify and --bluecat-ca-file")
 	}
 	return cfg, nil
 }
@@ -140,6 +149,9 @@ func overlayFile(cfg *Config) error {
 	}
 	if file.RootZone != "" {
 		cfg.RootZone = file.RootZone
+	}
+	if file.CAFile != "" {
+		cfg.CAFile = file.CAFile
 	}
 	cfg.SkipTLSVerify = file.SkipTLSVerify
 	return nil
