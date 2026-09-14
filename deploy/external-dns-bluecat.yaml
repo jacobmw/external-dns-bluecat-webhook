@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bluecat
+  namespace: external-dns
+type: Opaque
+stringData:
+  BLUECAT_HOST: "https://bam.example.com"
+  BLUECAT_USERNAME: "api-user"
+  BLUECAT_PASSWORD: "change-me"
+  BLUECAT_ROOT_ZONE: "example.com"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-dns
+  namespace: external-dns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: external-dns
+  template:
+    metadata:
+      labels:
+        app: external-dns
+    spec:
+      serviceAccountName: external-dns
+      containers:
+        - name: webhook
+          image: external-dns-bluecat-webhook:dev
+          args:
+            - --listen-address=127.0.0.1:8888
+            - --health-address=:8080
+            - --domain-filter=example.com
+            - --bluecat-dns-deploy-type=no-deploy
+          envFrom:
+            - secretRef:
+                name: bluecat
+          ports:
+            - name: health
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+        - name: external-dns
+          image: registry.k8s.io/external-dns/external-dns:v0.18.0
+          args:
+            - --source=service
+            - --source=ingress
+            - --provider=webhook
+            - --webhook-provider-url=http://127.0.0.1:8888
+            - --txt-owner-id=example
+            - --policy=upsert-only
+            - --registry=txt
